@@ -1,0 +1,11 @@
+.build/
+.swiftpm/
+Packages/
+.DS_Store
+.venv/
+artifacts/
+.verification/
+*.log
+
+__pycache__/
+.pytest_cache/

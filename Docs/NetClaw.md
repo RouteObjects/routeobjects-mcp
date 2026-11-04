@@ -1,0 +1,15 @@
+# NetClaw opt-in integration
+
+The experimental local fork uses upstream baseline `a57566f8ced1d2673b01b661000bef0ec0087fd6`, branch `experiment/swift-cidr-mcp`. Its previous local `main` is preserved at `4d791a364989405a98ac52bec91a9530cf4317b4`. There is no maintainer-approved numbered specification or published contribution yet.
+
+Identifiers are component `routeobjects`, MCP server `routeobjects-mcp`, and executable override `ROUTEOBJECTS_MCP_BIN`. The existing `subnet-calc` component remains available; curated minimal/recommended/vendor/lab defaults and protected Hermes policy are unchanged. The `full` profile also retains its upstream membership; the experiment requires explicit component selection.
+
+The local change updates the canonical catalog, generated catalog/docs/HUD and ordinary MCP registrations, access/effect inventories, native installer adapter and path binding, a tool skill, and affected contract suites. The skill explains when to select each semantic kind, exact string counts, domain errors, and the distinction between adjacency and mergeability.
+
+Since no release artifacts are published, setup uses an explicitly supplied local executable, expected SHA-256 and version. It checks the supplied checksum, copies verified bytes to an installation-owned path, then verifies that the owned executable reports `routeobjects-mcp 0.1.0`. Resume verifies the owned file. It does not install Swift, change system packages or silently substitute an unverified download. Use a qualified native archive and provision its documented OS runtime prerequisites first.
+
+The renamed Debug and Release binaries each passed seven import/helper cases and six calls through the actual OpenClaw `2026.7.1-2` MCP runtime, spanning all four tools, contextual addresses, exact IPv6 `/0` cardinality and domain errors. Each executable was checksum-verified and imported into an isolated owned path before helper calls. These checks reuse the previously installed runtime package; they do not claim a fresh full NetClaw installation. The helper discards successful server stderr, so the independent subprocess harness owns stdout/stderr qualification.
+
+The existing local chat registration was migrated and hot-reloaded, preserving authentication, model configuration and history. No new model turn was executed. The earlier AI-selected demonstration retains its old build identity. Full setup-engine/service deployment remains unqualified; no service or source-origin guards were weakened and no user home directory was overridden.
+
+Current evidence in the NetClaw checkout is `docs/proposals/routeobjects-mcp-naming-verification.md`; `routeobjects-cidr-verification.md` remains historical. The 11 component fixtures, nine catalog tests, 277-test installer suite with 32 declared skips, five runtime-isolation checks and six reconciliation surfaces pass. The runtime's caller `AbortSignal` limitation remains; timeout cancellation/recovery passed without establishing cancellation of server-active work. Coordinate contribution scope and the specification number with the maintainer before upstream submission.

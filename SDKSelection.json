@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "baseline": {
+    "repositoryURL": "https://github.com/modelcontextprotocol/swift-sdk.git",
+    "version": "0.12.1",
+    "revision": "a0ae212ebf6eab5f754c3129608bc5557637e605"
+  },
+  "maintenance": {
+    "repositoryURL": "https://github.com/RouteObjects/swift-sdk.git",
+    "revision": "10cb175661ab095abfc73cf293a0c79af244e61e",
+    "sourceSHA256": "d4a82bbb1e207cfe598c8e68d1d7831bb00308353fb8a1bdcdab7c58b2f0a9ab",
+    "lockfileSHA256": "9d6586496c8b53f4c5be7c6c80c11472da39567910224b607254e6ea8f9d59dd"
+  }
+}
