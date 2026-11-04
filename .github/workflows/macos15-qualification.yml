@@ -1,0 +1,178 @@
+name: macOS 15 source qualification
+
+# Manual only: new artifacts receive their own receipts/hashes; no tags/releases.
+# A pass does not qualify previously built Swift 6.3.3 macOS archives.
+"on":
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  qualify:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15-intel
+            architecture: x86_64
+          - runner: macos-15
+            architecture: arm64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 40
+    env:
+      SOURCE_REVISION: 8595fae93803083b6146d04356b1bd02f0d8bfe0
+      SDK_REVISION: 10cb175661ab095abfc73cf293a0c79af244e61e
+      EXPECTED_ARCH: ${{ matrix.architecture }}
+      DEVELOPER_DIR: /Applications/Xcode_26.2.app/Contents/Developer
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Check out the reviewed published source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: 8595fae93803083b6146d04356b1bd02f0d8bfe0
+          persist-credentials: false
+      - name: Record and enforce native macOS 15 environment
+        run: |
+          set -euo pipefail
+          umask 0077
+          mkdir -p evidence
+          test "$(git rev-parse HEAD)" = "$SOURCE_REVISION"
+          test "$(git rev-parse 'HEAD^{tree}')" = 6dac3e8fa6e7b243084717d10281bad9355f34ae
+          test "$(uname -m)" = "$EXPECTED_ARCH"
+          test "$(sw_vers -productVersion | cut -d. -f1)" = 15
+          translated="$(sysctl -in sysctl.proc_translated 2>/dev/null || true)"
+          case "$translated" in ""|0) ;; *) exit 1 ;; esac
+          printf '%s\n' "${translated:-not-present}" > evidence/process-translation.txt
+          test -d "$DEVELOPER_DIR"
+          swift --version > evidence/swift.txt 2>&1
+          sw_vers > evidence/os.txt
+          uname -a > evidence/kernel.txt
+          xcodebuild -version > evidence/xcode.txt
+          printf '%s\n' "$SOURCE_REVISION" > evidence/source-revision.txt
+          printf '%s\n' "${ImageOS:-unknown}" "${ImageVersion:-unknown}" > evidence/runner-image.txt
+          python3 -c 'import re; s=open("evidence/swift.txt").read(); m=re.search(r"Swift version (\d+)\.(\d+)",s); assert m and tuple(map(int,m.groups())) >= (6,2)'
+          python3 - <<'PY'
+          import hashlib, json, pathlib, subprocess
+          paths = subprocess.check_output(['git', 'ls-files', '-z']).decode().split('\0')[:-1]
+          assert len(paths) == 65, len(paths)
+          manifest = {p: hashlib.sha256(pathlib.Path(p).read_bytes()).hexdigest() for p in paths}
+          pathlib.Path('evidence/source-manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')
+          PY
+          test -z "$(git status --porcelain=v1 --untracked-files=no)"
+      - name: Create isolated test tooling and resolve locked dependencies
+        run: |
+          set -euo pipefail
+          umask 0077
+          python3 -m venv "$RUNNER_TEMP/cidr-validator"
+          "$RUNNER_TEMP/cidr-validator/bin/python" -m pip install --disable-pip-version-check --no-input -r Tests/Compatibility/requirements.txt
+          "$RUNNER_TEMP/cidr-validator/bin/python" -m pip freeze > evidence/python-packages.txt
+          ./Scripts/configure-pilot.sh 2>&1 | tee evidence/configure.log
+          python3 Scripts/verify-dependencies.py 2>&1 | tee evidence/dependencies.log
+          python3 -m unittest discover -s Tests/Packaging -v 2>&1 | tee evidence/tooling.log
+      - name: Test Debug and Release on the native runner
+        run: |
+          set -euo pipefail
+          umask 0077
+          for configuration in debug release; do
+            python3 Scripts/build-pilot.py test --configuration "$configuration" 2>&1 | tee "evidence/$configuration-swift.log"
+            python3 Scripts/build-pilot.py build --configuration "$configuration" 2>&1 | tee "evidence/$configuration-build.log"
+            cp ".build/$configuration/routeobjects-mcp.build-receipt.json" "evidence/$configuration-build-receipt.json"
+            "$RUNNER_TEMP/cidr-validator/bin/python" Tests/Compatibility/test_stdio.py --binary ".build/$configuration/routeobjects-mcp" -v 2>&1 | tee "evidence/$configuration-stdio.log"
+          done
+      - name: Package and test the extracted native archive
+        run: |
+          set -euo pipefail
+          umask 0077
+          target="macos-$EXPECTED_ARCH"
+          python3 Scripts/archive-pilot.py --binary .build/release/routeobjects-mcp --platform "$target" --execution native --output artifacts/qualification 2>&1 | tee evidence/archive.log
+          mkdir -p "$RUNNER_TEMP/cidr-extracted" "$RUNNER_TEMP/cidr-runtime-tmp"
+          archive="artifacts/qualification/routeobjects-mcp-0.1.0-pilot-$target.tar.gz"
+          (cd artifacts/qualification && shasum -a 256 -c "$(basename "$archive").sha256") | tee evidence/archive-checksum.log
+          tar -xzf "$archive" -C "$RUNNER_TEMP/cidr-extracted"
+          binary="$RUNNER_TEMP/cidr-extracted/routeobjects-mcp-0.1.0-pilot-$target/bin/routeobjects-mcp"
+          file "$binary" | tee evidence/binary-format.txt
+          test "$(lipo -archs "$binary")" = "$EXPECTED_ARCH"
+          otool -L "$binary" > evidence/linked-libraries.txt
+          otool -l "$binary" > evidence/load-commands.txt
+          # Restricted PATH and network denial do not remove Xcode from the hosted runner.
+          env -i PATH=/usr/bin:/bin:/usr/sbin:/sbin TMPDIR="$RUNNER_TEMP/cidr-runtime-tmp" PYTHONDONTWRITEBYTECODE=1 /usr/bin/sandbox-exec -p '(version 1)(allow default)(deny network*)' "$RUNNER_TEMP/cidr-validator/bin/python" Tests/Compatibility/test_stdio.py --binary "$binary" -v 2>&1 | tee evidence/extracted-stdio.log
+          cp "$RUNNER_TEMP/cidr-extracted/routeobjects-mcp-0.1.0-pilot-$target/BUILD-INFO.json" evidence/
+          cp "$RUNNER_TEMP/cidr-extracted/routeobjects-mcp-0.1.0-pilot-$target/BUILD-RECEIPT.json" evidence/
+          python3 - "$archive" "$binary" <<'PY'
+          import hashlib, json, os, pathlib, re, subprocess, sys
+          sys.path.insert(0, 'Scripts')
+          from pilot_provenance import sha256, validate_receipt
+          from sdk_selection import load_selection, verify_sdk
+          root = pathlib.Path.cwd()
+          archive, binary = map(pathlib.Path, sys.argv[1:])
+          extracted = binary.parent.parent
+          target = 'macos-' + os.environ['EXPECTED_ARCH']
+          selection = load_selection(root)
+          assert selection['maintenance']['revision'] == os.environ['SDK_REVISION']
+          sdk = verify_sdk(root, selection)
+          receipt, receipt_sha = validate_receipt(extracted / 'BUILD-RECEIPT.json', binary, root, sdk, target)
+          info = json.loads((extracted / 'BUILD-INFO.json').read_text())
+          pins = json.loads((root / 'Package.resolved').read_text())['pins']
+          assert len(pins) == len({p['identity'] for p in pins}) == 9
+          assert info['dependencies'] == receipt['inputs']['dependencies'] == pins
+          assert info['target'] == target and info['executionEvidence'] == 'native'
+          assert info['releaseReady'] is False
+          assert info['buildReceiptSHA256'] == receipt_sha
+          assert info['binarySHA256'] == receipt['binary']['sha256'] == sha256(binary) == sha256(root / '.build/release/routeobjects-mcp')
+          assert 0 < binary.stat().st_size <= 64 * 1024 * 1024
+          assert info['sdk']['revision'] == os.environ['SDK_REVISION']
+          assert info['sdk']['selectionMode'] == 'pinned' and info['sdk']['uncommittedMaintenancePatch'] is False
+          assert info['sourceSHA256'] == receipt['inputs']['application']['sourceSHA256']
+          assert info['lockfileSHA256'] == receipt['inputs']['application']['lockfileSHA256']
+          assert info['build'] == receipt['build'] and receipt['build']['configuration'] == 'release'
+          assert info['build']['host']['system'] == 'Darwin'
+          assert info['build']['host']['architecture'] == os.environ['EXPECTED_ARCH']
+          for configuration in ('debug', 'release'):
+              built = root / '.build' / configuration / 'routeobjects-mcp'
+              checked, _ = validate_receipt(root / 'evidence' / (configuration + '-build-receipt.json'), built, root, sdk, target)
+              assert checked['build']['configuration'] == configuration
+          checksum_fields = pathlib.Path(str(archive) + '.sha256').read_text().split()
+          assert checksum_fields == [sha256(archive), archive.name]
+          for name in ('README.md', 'CONTRACTS.md', 'LICENSE', 'Package.resolved', 'SDKSelection.json'):
+              assert (extracted / name).read_bytes() == (root / name).read_bytes(), name
+          for directory in ('Docs', 'ThirdPartyNotices'):
+              expected = {p.relative_to(root) for p in (root / directory).rglob('*') if p.is_file()}
+              actual = {p.relative_to(extracted) for p in (extracted / directory).rglob('*') if p.is_file()}
+              assert expected == actual
+              assert all((root / p).read_bytes() == (extracted / p).read_bytes() for p in expected)
+          assert {p.name for p in (extracted / 'ThirdPartyLicenses').iterdir()} == {p['identity'] for p in pins}
+          for pin in pins:
+              dependency = sdk if pin['identity'] == 'swift-sdk' else root / '.build/checkouts' / pin['identity']
+              expected = {p.name: p.read_bytes() for p in dependency.iterdir() if p.is_file() and p.name.lower().startswith(('license', 'notice'))}
+              actual = {p.name: p.read_bytes() for p in (extracted / 'ThirdPartyLicenses' / pin['identity']).iterdir() if p.is_file()}
+              assert expected and expected == actual, pin['identity']
+          load_commands = pathlib.Path('evidence/load-commands.txt').read_text()
+          assert re.findall(r'cmd LC_BUILD_VERSION\s+cmdsize \d+\s+platform (\d+)\s+minos ([\d.]+)', load_commands) == [('1', '15.0')]
+          counts = {}
+          expectations = {'tooling': (52, False), 'debug-swift': (39, True), 'release-swift': (39, True), 'debug-stdio': (30, False), 'release-stdio': (30, False), 'extracted-stdio': (30, False)}
+          for name, (count, swift) in expectations.items():
+              log = pathlib.Path('evidence/' + name + '.log').read_text()
+              pattern = r'Test run with (\d+) tests in \d+ suites passed' if swift else r'Ran (\d+) tests in '
+              observed = re.findall(pattern, log)
+              assert observed == [str(count)], (name, observed, count)
+              if not swift:
+                  assert re.search(r'^OK\s*$', log, re.MULTILINE), name
+              counts[name] = count
+          summary = {'sourceRevision': os.environ['SOURCE_REVISION'], 'sdkRevision': os.environ['SDK_REVISION'], 'target': target, 'macOSVersion': subprocess.check_output(['sw_vers', '-productVersion'], text=True).strip(), 'archiveSHA256': sha256(archive), 'binarySHA256': sha256(binary), 'buildReceiptSHA256': receipt_sha, 'dependencyCount': len(pins), 'testCounts': counts, 'releaseReady': False, 'scope': 'New native macOS 15 runner archive only; does not qualify earlier archives or exact macOS 15.0 if runner uses a later 15.x patch. Restricted PATH and denied network; Xcode remains installed.'}
+          pathlib.Path('evidence/qualification.json').write_text(json.dumps(summary, indent=2) + '\n')
+          print(json.dumps(summary, indent=2))
+          PY
+          test -z "$(git status --porcelain=v1 --untracked-files=no)"
+      - name: Retain public-source qualification evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: macos15-${{ matrix.architecture }}-8595fae-qualification
+          path: |
+            evidence/
+            artifacts/qualification/
+          if-no-files-found: error
+          retention-days: 14
