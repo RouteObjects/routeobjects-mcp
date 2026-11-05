@@ -5,7 +5,7 @@
 
 RouteObjects MCP provides explicit networking operations for AI agents. The initial pilot offers four local, deterministic IPv4/IPv6 tools backed by [`swift-cidr`](https://github.com/RouteObjects/swift-cidr). It keeps bare addresses, addresses carrying prefix context, and canonical networks distinct. Additional RouteObjects capabilities will be introduced through separately defined tool contracts.
 
-**Status: experimental 0.1.0 pilot; no release is published.** The complete lockfile selects the RouteObjects SDK maintenance fork at published commit [`10cb175661ab095abfc73cf293a0c79af244e61e`](https://github.com/RouteObjects/swift-sdk/commit/10cb175661ab095abfc73cf293a0c79af244e61e), based on released MCP Swift SDK **0.12.1**. `SDKSelection.json` records that immutable revision and the independently approved SDK source/lock hashes. This is a RouteObjects maintenance revision, not an official SDK release. [Published-pin verification](Docs/Publication-Preparation.md#published-sdk-pin-verification) records the actual clean-checkout results; earlier local-edit results remain historical evidence.
+**Experimental 0.1.0 pilot.** The publication plan selects an experimental GitHub prerelease tagged `0.1.0` at application commit [`8595fae93803083b6146d04356b1bd02f0d8bfe0`](https://github.com/RouteObjects/routeobjects-mcp/commit/8595fae93803083b6146d04356b1bd02f0d8bfe0). Four selected native macOS/Linux archives have scoped qualification evidence. See the [pilot distribution plan](Docs/Pilot-Distribution.md) for exact artifacts, checksums, local setup and the distinction between the tagged build source and later documentation. Check the [repository releases](https://github.com/RouteObjects/routeobjects-mcp/releases) for availability; this plan does not assert that a release or its assets have been published. The complete lockfile selects the RouteObjects SDK maintenance fork at published commit [`10cb175661ab095abfc73cf293a0c79af244e61e`](https://github.com/RouteObjects/swift-sdk/commit/10cb175661ab095abfc73cf293a0c79af244e61e), based on released MCP Swift SDK **0.12.1**. `SDKSelection.json` records that immutable revision and the independently approved SDK source/lock hashes. This is a RouteObjects maintenance revision, not an official SDK release. [Published-pin verification](Docs/Publication-Preparation.md#published-sdk-pin-verification) records the actual clean-checkout results; earlier local-edit results remain historical evidence.
 
 ## Tools
 
@@ -82,7 +82,7 @@ The experimental local integration is opt-in under component `routeobjects`, ser
 
 ## Distribution and license
 
-Apache-2.0. Third-party licenses and source revisions accompany every prepared archive. Native macOS and glibc Linux ARM64/x86-64 are qualification targets, not claims that four artifacts have passed. Native Windows, musl distribution, WSL2 qualification, protected Hermes, HTTP hosting and MCPB packaging remain outside this pilot. Use only a platform artifact with matching recorded native evidence.
+Apache-2.0. Third-party licenses and source revisions accompany every prepared archive. The selected four archives have native evidence: macOS ARM64 on 15.8.2, macOS x86-64 on 15.7.9, Linux ARM64 on Ubuntu 24.04 and Linux x86-64 on Ubuntu 24.04.5. macOS 15 remains the minimum; exact 15.0 execution is not claimed. The new macOS CI archives and qualified Linux archives are identified by hash in the [distribution plan](Docs/Pilot-Distribution.md), with complete boundaries in [published-source qualification](Docs/Published-Source-Qualification.md). The selection identifies exact qualified bytes; the installer does not download them automatically. Native Windows, musl, WSL2, protected Hermes, HTTP hosting and MCPB remain outside this pilot.
 
 After configuring the selected SDK, build an executable with `python3 Scripts/build-pilot.py build --configuration release`
 before packaging it. A successful explicit build writes a sibling
@@ -91,8 +91,11 @@ and verifies the executable, compiled inputs, SDK revision, dependency locks and
 target. A copied executable can use `--receipt /path/to/its/receipt.json`. Receipts
 are unsigned integrity records, not signatures. Post-build stripping, signing or other
 modification of receipted bytes is rejected; post-build transformations need a separately
-defined provenance step before they can be distributed. Archives remain
-`releaseReady: false` pending qualification of the pinned build and final release artifacts.
+defined provenance step before they can be distributed. The selected, already qualified archives retain their original
+`releaseReady: false` packaging metadata. That immutable field records their
+build-time candidate status, not live publication or approval state. No
+repackaging or rebuild is needed merely to update documentation. A later change to binary
+bytes would need its own matching provenance and qualification.
 
 Linux distribution builds use `--static-swift-stdlib --linker-strip-all` with the
 Release build command. The latter removes symbols during linking, is restricted
