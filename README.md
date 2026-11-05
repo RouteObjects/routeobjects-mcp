@@ -1,6 +1,6 @@
 <h1 align="left">
-  <img src="Docs/Assets/routeobjects-mcp.png" alt="swift-cidr icon" width="75" height="75" valign="middle">
-  &nbsp;CIDR
+  <img src="Docs/Assets/routeobjects-mcp.png" alt="routeobjects-mcp icon" width="75" height="75" valign="middle">
+  &nbsp;routeobjects-mcp
 </h1>
 
 RouteObjects MCP provides explicit networking operations for AI agents. The initial pilot offers four local, deterministic IPv4/IPv6 tools backed by [`swift-cidr`](https://github.com/RouteObjects/swift-cidr). It keeps bare addresses, addresses carrying prefix context, and canonical networks distinct. Additional RouteObjects capabilities will be introduced through separately defined tool contracts.
